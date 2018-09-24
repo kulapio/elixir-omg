@@ -97,7 +97,7 @@ defmodule OMG.Watcher.BlockGetter.Core do
   end
 
   @doc """
-  Marks that childchain block `blknum` was processed
+  Marks that child chain block published on `blk_eth_height` was processed
   """
   @spec consume_block(t(), pos_integer()) :: {t(), non_neg_integer(), list()}
   def consume_block(%__MODULE__{} = state, blk_eth_height) do
@@ -115,6 +115,12 @@ defmodule OMG.Watcher.BlockGetter.Core do
     {synced_height + 1, coordinator_height}
   end
 
+  @doc """
+  Returns blocks that can be pushed to state.
+
+  That is the longest continous range of blocks downloaded from child chain,
+  contained in `block_submitted_events`, published on ethereum height not exceeding `coordinator_height` and not pushed to state before.
+  """
   @spec get_blocks_to_consume(t(), list(), non_neg_integer()) ::
           {list({Block.t(), non_neg_integer()}), non_neg_integer(), list(), t()}
   def get_blocks_to_consume(state, block_submitted_events, coordinator_height)
@@ -141,12 +147,12 @@ defmodule OMG.Watcher.BlockGetter.Core do
       |> Stream.iterate(&(&1 + interval))
       |> Enum.take_while(fn blknum -> Map.has_key?(submissions, blknum) and Map.has_key?(blocks, blknum) end)
 
+    blocks_to_keep = Map.drop(blocks, blknums_to_consume)
+    last_consumed_block = List.last([last_consumed_block] ++ blknums_to_consume)
+
     blocks_to_consume =
       blknums_to_consume
       |> Enum.map(fn blknum -> {Map.get(blocks, blknum), Map.get(submissions, blknum)} end)
-
-    blocks_to_keep = Map.drop(blocks, blknums_to_consume)
-    last_consumed_block = List.last([last_consumed_block] ++ blknums_to_consume)
 
     {blocks_to_consume, state.synced_height, [],
      %{state | blocks_to_consume: blocks_to_keep, last_consumed_block: last_consumed_block}}
